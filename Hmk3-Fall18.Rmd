@@ -1,0 +1,296 @@
+---
+title: 'Homework #3'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE)
+```
+
+For questions 1-4 in this problem set, we will work with a dataset on dogs of New York City, found here: https://project.wnyc.org/dogs-of-nyc/
+
+Background: The dataset is dated June 26, 2012. Although the data were originally produced by the NYC Department of Mental Health and Hygiene, it no longer seems to be available on any official NYC web site. (There is a 2016 dataset on dog licenses with different variables available here: https://data.cityofnewyork.us/Health/NYC-Dog-Licensing-Dataset/nu7n-tubp). Also of note is the fact that this dataset has 81,542 observations. The same summer, the New York City Economic Development Corporation estimated that there were 600,000 dogs in New York City (source: https://blog.nycpooch.com/2012/08/28/how-many-dogs-live-in-new-york-city/) Quite a difference! How many dogs were there really in 2012?!? Might be an interesting question to pursue for a final project, but for now we'll work with what we've got.
+
+```{r}
+dogs <- read.csv("NYCdogs.csv")
+```
+
+### 1. Missing Data
+
+(a) Create a bar chart showing percent missing by variable.
+
+```{r fig.width=14, fig.height=8}
+library(dplyr)
+library(ggplot2)
+library(reshape)
+
+missingdata <- colMeans(dogs == "n/a")
+melt_missingdata <- melt(missingdata)
+df <- as.data.frame(melt_missingdata)
+colnames(df) <- 'perc'
+
+g1 <- ggplot(df, aes(x = rownames(df), y =df$perc)) + geom_bar(stat ='identity') 
+g1 + xlab("") + ylab("Percentage")
+```
+
+(b) Use the `extracat::visna()` to graph missing patterns. Interpret the graph.
+
+```{r fig.width=6, fig.height=6}
+library(extracat)
+dogs[ dogs == "n/a" ] <- NA
+extracat::visna(dogs)
+```
+There are a total of 22 missing patterns. 
+The three most popular patterns are missing third_color, missing secondary color and missing nothing. 
+Third color has the most missing values. Secondary color has a lot of missing values too.
+There are some missing dog_name.
+
+
+
+(c) Do `dog_name` missing patterns appear to be associated with the *value* of `gender`, `Group` *or* `borough`?  
+
+```{r}
+n <- nrow(dogs)
+percent_missing <- dogs %>% group_by(gender) %>% 
+  summarize(count = n(), num_na = sum(is.na(dog_name))) %>% 
+  mutate(percent_na = round(num_na/n, 2)) %>% 
+  arrange(-percent_na)
+percent_missing
+```
+Seems that there are more males dogs than female dogs having missing names. But they only differ by 0.01.
+
+```{r}
+percent_missing <- dogs %>% group_by(Group) %>% 
+  summarize(count = n(), num_na = sum(is.na(dog_name))) %>% 
+  mutate(percent_na = round(num_na/n, 2)) %>% 
+  arrange(-percent_na)
+percent_missing
+```
+Seems that Mutt and Toy groups has slightly more missing names than Non-Sporting than the rests. 
+
+```{r}
+percent_missing <- dogs %>% group_by(borough) %>% 
+  summarize(count = n(), num_na = sum(is.na(dog_name))) %>% 
+  mutate(percent_na = round(num_na/n, 2)) %>% 
+  arrange(-percent_na)
+percent_missing
+```
+Seems that Manhattan has slightly more missing names than Bronx, Brooklyn and Queens than Staten Island.
+
+
+### 2. Dates
+
+(a) Convert the `birth` column of the NYC dogs dataset to `Date` class (use "01" for the day since it's not provided). Create a frequency histogram of birthdates with a one-month binwidth.  (Hint: don't forget about base R.) What do you observe? Provide a reasonable hypothesis for the prominent pattern in the graph.
+
+```{r}
+library(zoo)
+a <- as.Date(paste('01-', dogs$birth, sep =""), format = "%d-%b-%y")
+b <- as.Date(paste('01-', dogs$birth, sep =""), format = "%d-%y-%b")
+a[is.na(a)] <- b[!is.na(b)]
+dogs$birth <- a
+```
+
+```{r}
+hist(dogs$birth, breaks = "months", xlab="birth")
+```
+I observe some impossible values such that the x scale starts with 1974 and ends in 2057. There is no way a dog that's born in 1974 is still alive and there is no dog in the record should be born after 2018. Those are fake data. 
+
+I observe a generally increasing pattern. The number of dogs are increasing over the years. There are more and more dogs.
+
+I observe a yearly pattern that one month has significantly more dogs compare to the rest of the year. However, due to the graph, I can't tell which month has the most births of dogs.
+
+(b) Redraw the frequency histogram with impossible values removed and a more reasonable binwidth.
+
+```{r}
+dogs_wo <- with(dogs, dogs[(dogs$birth >= "1990-01-01" & dogs$birth <= "2018-01-01"), ])
+hist(dogs_wo$birth, breaks = "year", xlab="birth")
+```
+With a binwidth of "year", we can see the general trend that there are more and more dogs in new york. 
+
+```{r fig.width=10, fig.height=8}
+library(scales)
+g1 <- ggplot(dogs_wo, aes(x=birth)) + geom_bar() + facet_wrap(~lubridate::year(birth), scales=("free_x")) 
+g1
+```
+After faceting by year, we can see January has the most births of dogs.
+
+### 3. Mosaic plots
+
+(a) Create a mosaic plot to see if `dominant_color` depends on `Group`. Use only the top 5 dominant colors; group the rest into an "OTHER" category. The last split should be the dependent variable and it should be horizontal. Sort each variable by frequency, with the exception of "OTHER", which should be the last category for dominant color. The labeling should be clear enough to identify what's what; it doesn't have to be perfect. Do the variables appear to be associated? Briefly describe.
+
+```{r}
+countorder <- dogs %>% group_by(dominant_color) %>% dplyr::summarize(count = n())
+sort_countorder <- countorder[order(countorder$count,decreasing = TRUE),]
+sort_countorder
+```
+
+```{r}
+countorder <- dogs %>% group_by(Group) %>% dplyr::summarize(count = n())
+sort_countorder <- countorder[order(countorder$count,decreasing = TRUE),]
+sort_countorder
+```
+
+```{r}
+colorsofdog <- c('BLACK','WHITE','BROWN','TAN','BLOND')
+groupsofdog <- c('Mutt','Toy','Non-Sporting','Terrier',
+                 'Sporting','Working','Hound','Herding')
+```
+
+```{r fig.width=8,fig.height=6}
+other <- subset(dogs, dominant_color != 'BLACK' & dominant_color !='WHITE' &
+                dominant_color !='TAN' & dominant_color !='BROWN' 
+                & dominant_color !='BLOND')
+other$dominant_color <- "OTHER"
+
+a <- dogs[which(dogs$dominant_color == 'BLACK'),]
+b <- dogs[which(dogs$dominant_color == 'WHITE'),]
+c <- dogs[which(dogs$dominant_color == 'BROWN'),]
+d <- dogs[which(dogs$dominant_color == 'TAN'),] 
+e <- dogs[which(dogs$dominant_color == 'BLOND'),]
+
+new <- rbind(a,b,c,d,e,other)
+new_wo <- rbind(a,b,c,d,e)
+```
+
+```{r fig.width=16, fig.height=10}
+library(vcd)?
+library(grid)
+counts2 <- new %>% group_by(dominant_color, Group) %>% summarize(Freq = n()) 
+counts2$dominant_color <- droplevels(counts2$dominant_color)
+coo <- within(counts2, dominant_color <- factor(dominant_color, levels=c(colorsofdog, 'OTHER')))
+
+top5 =c('BLACK','WHITE','BROWN','TAN','BLOND')
+coo <- within(counts2, Group <- factor(Group, levels=c(groupsofdog, 'OTHER')))
+coo$dominant_color <- ordered(coo$dominant_color, levels = c(top5,'OTHER'))
+
+domi_color <- c('black','white','brown','tan','goldenrod4',' gray')
+vcd::mosaic(coo$dominant_color ~ Group, coo, direction =c('v','h'),
+            gp = gpar(fill = domi_color))
+```
+
+From the graph, we can see, the proportion differs by a small amount. 
+Herding, Hound and Working groups of dogs has most black dominant color and least white dominant color.
+Sporting group has most blond dominant color and also little white dominant color as well.
+
+(b) Redraw with the "OTHER" category filtered out. Do the results change? How should one decide whether it's necessary or not to include an "OTHER" category?
+
+
+```{r fig.width=16, fig.height=10}
+library(vcd)
+library(grid)
+counts2 <- new_wo %>% group_by(dominant_color, Group) %>% summarize(Freq = n()) 
+counts2$dominant_color <- droplevels(counts2$dominant_color)
+coo <- within(counts2, dominant_color <- factor(dominant_color, levels=c(colorsofdog, 'OTHER')))
+
+top5 =c('BLACK','WHITE','BROWN','TAN','BLOND')
+coo <- within(counts2, Group <- factor(Group, levels=c(groupsofdog, 'OTHER')))
+coo$dominant_color <- ordered(coo$dominant_color, levels = c(top5,'OTHER'))
+
+domi_color <- c('black','white','brown','tan','goldenrod4',' gray')
+vcd::mosaic(coo$dominant_color ~ Group, coo, direction =c('v','h'),
+            gp = gpar(fill = domi_color))
+```
+
+Removing the "other" category allows us to see a stronger association. 
+Besides discoveries in the first part, we can also see Non-sporting and Terrier groups has most white colors. 
+
+I believe we should add an "other" category only when it helps us to analyze the data. 
+In the above problem, "other" doesn't help us gain any insight on the independence.
+Instead, it's confusing and we can't read any association from this added category. 
+
+### 4. Maps
+Draw a spatial heat map of the percent spayed or neutered dogs by zip code. What patterns do you notice?
+
+```{r}
+library(tidyverse)
+df <- dogs %>% select(spayed_or_neutered, zip_code) %>% 
+  count(zip_code, spayed_or_neutered) %>% group_by(zip_code) %>% transmute(spayed_or_neutered,value = n/sum(n))
+df <- df[df$spayed_or_neutered=="Yes",]
+```
+
+```{r}
+library(devtools)
+library(githubinstall)
+#install_github("arilamstein/choroplethrZip@v1.3.0")
+library(choroplethrZip)
+library(mapproj)
+library(ggplot2)
+data("df_pop_zip")
+library(zipcode)
+data("zip.regions")
+```
+
+```{r}
+df <- df %>% select(zip_code,value)
+colnames(df) = c('region','value')
+df$region <- as.character(df$region)
+df <- df[df$region %in% zip.regions$region,]
+zip_choropleth(df,zip_zoom=as.vector(df$region), title="dogs_spayed") + coord_map()
+```
+We can see from the graph that Staten Island and Manhattan has the highest percentage of dogs spayed and the rest has relatively lower percentage. The percentage ranges from 0.481 to 1. 
+
+### 5. Time Series
+
+(a) Use the `tidyquant` package to collect information on four tech stocks of your choosing. Create a multiple line chart of the closing prices of the four stocks on the same graph, showing each stock in a different color. 
+
+```{r}
+library(tidyquant)
+data("FANG")
+ggplot(FANG, aes(x = date)) + geom_line(aes(y = FANG$close, color = FANG$symbol))
+```
+
+(b) Transform the data so each stock begins at 100 and replot. Choose a starting date for which you have data on all of the stocks. Do you learn anything new that wasn't visible in (a)?
+
+```{r}
+FB <- FANG [which(FANG$symbol == "FB"),]
+FB$close <- FB$close*100/28
+
+AMZN <- FANG [which(FANG$symbol == "AMZN"),]
+AMZN$close <- AMZN$close*100/257.31
+
+GOOG <- FANG [which(FANG$symbol == "GOOG"),]
+GOOG$close <- GOOG$close*100/723.2512
+
+NFLX <- FANG [which(FANG$symbol == "NFLX"),]
+NFLX$close <- NFLX$close*100/92.01
+
+color <- c("blue","red","forest green","yellow")
+
+g1 <- ggplot() + geom_line(data = FB, aes(x = date, y=close, color='FB')) + 
+  geom_line(data=AMZN, aes(x=date, y=close, color ='AMZN')) + 
+  geom_line(data=GOOG, aes(x= date, y=close, color ='GOOG')) +
+  geom_line(data=NFLX, aes(x= date, y=close, color ='NFLX')) +
+  scale_colour_manual(values = c("AMZN"='red',"FB"='blue',
+                                 "GOOG"='forest green',"NFLX"='yellow'))
+g1
+```
+As the stocks all start at the same $100, we can observe and compare trends. We can tell that after four years, Facebook is doing the best, Amazon is doing all right while Google and Netflix are not doing so well. From part a we can only tell that Amazon and Facebook has the higher close price in 2017 while the other two has lower. I can't compare Amazon and Facebook with the first graph.
+
+
+### 6. Presentation
+
+Imagine that you have been asked to create a graph from the Dogs of NYC dataset that will be presented to a very important person (or people). The stakes are high.
+
+(a) Who is the audience? (Mayor DeBlasio, a real estate developer, the voters, the City Council, the CEO of Purina...)
+
+Every dog person living in the New York city.
+
+(b) What is the main point you hope someone will take away from the graph?
+
+Through this graph, we can see there are generally more female dogs than male dogs, independent of the group. 
+The ratios are approximately similar. 
+
+(c) Present the graph, cleaned up to the standards of "presentation style." Pay attention to choice of graph type, if and how the data will be summarized, if and how the data will be subsetted, title, axis labels, axis breaks, axis tick mark labels, color, gridlines, and any other relevant features.
+
+```{r}
+g1 <- ggplot(dogs, aes(x = factor(gender))) + geom_bar() + xlab('gender')
+g1 + ggtitle("Gender of Dogs")
+```
+
+```{r}
+ggplot(dogs, aes(x=factor(gender))) + geom_bar() + facet_wrap(~Group) + xlab('gender') + ggtitle('Dog Gender facet by Group')
+```

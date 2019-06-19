@@ -1,0 +1,282 @@
+---
+title: 'Homework #2'
+author: Ruxin Shen
+output:
+pdf_document: default
+df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE,
+                      message = FALSE, 
+                      cache = TRUE,
+                      fig.width=6, fig.height=10) 
+```
+
+### 1. **Flowers**
+
+Data:  `flowers` dataset in  **cluster** package
+
+```{r import}
+library(h2o)
+library(cluster)
+library(ggplot2)
+data("flower")
+```
+
+(a) Rename the column names and recode the levels of categorical variables to descriptive names. For example, "V1" should be renamed "winters" and the levels to "no" or "yes". Display the full dataset.
+
+```{r rename cols & recode levels}
+library(plyr)
+colnames(flower) <- c("winter","shadow","tubers","color","soil",
+                      "preference","height","distance")
+flower$winter <- revalue(factor(flower$winter), 
+                         replace = c("1" = "Yes", "0" = "No"))
+flower$shadow <- revalue(factor(flower$shadow), 
+                         replace = c("1" = "Yes", "0" = "No"))
+flower$tubers <- revalue(factor(flower$tubers), 
+                         replace = c("1" = "Yes", "0" = "No"))
+flower$color <- revalue(factor(flower$color), 
+                        replace = c("1" = "white", "2" = "yellow",
+                                    "3" = "pink", "4" = "red", "5" = "blue"))
+flower$soil <- revalue(factor(flower$soil), 
+                       replace = c("1" = "dry", "2" = "normal", "3" = "wet"))
+flower
+```
+
+(b) Create frequency bar charts for the `color` and `soil` variables, using best practices for the order of the bars.
+```{r fig.height=4}
+library(dplyr)
+#color <- factor(flower$color)
+countorder <- flower %>% group_by(color) %>% dplyr::summarize(count = n())
+sort_countorder <- countorder[order(countorder$count),]
+g1 <- ggplot(sort_countorder,aes(x=reorder(color,count),y=count))+geom_bar(stat='identity') +
+  xlab("Color")
+g1
+
+#soil <- factor(flower$soil)
+countorder <- flower %>% group_by(soil) %>% dplyr::summarize(count = n())
+sort_countorder <- countorder[order(countorder$count),]
+g2 <- ggplot(sort_countorder,aes(x=reorder(soil,count),y=count))+geom_bar(stat='identity') + 
+  xlab("Soil")
+g2
+```
+
+```{r fig.height=4}
+#alternatively
+g3 <- ggplot(flower, aes(soil)) + geom_bar(aes(fill = color), 
+  position = position_dodge2(preserve = "single"), stat="count") +
+  scale_fill_manual(values=c("#FFFFFF", "#FFFF00", "#FFC0CB","#FF0000","#0000FF"))
+g3
+```
+
+
+### 2. Minneapolis
+
+Data: `MplsDemo` dataset in **carData** package
+
+```{r}
+library(carData)
+data("MplsDemo")
+```
+
+(a) Create a Cleveland dot plot showing estimated median household income by neighborhood.
+
+```{r}
+g1 <- ggplot(MplsDemo, aes(x = hhIncome, y = reorder(neighborhood,hhIncome,median),
+  group=neighborhood )) + geom_point() + ylab("Neighborhood") + xlab("Median Income")
+g1
+```
+
+
+(b) Create a Cleveland dot plot to show percentage of foreign born, earning less than twice the poverty level, and with a college degree in different colors.  Data should be sorted by college degree.
+
+```{r }
+g2 <- ggplot(MplsDemo, aes(x = collegeGrad, 
+  y = reorder(neighborhood,collegeGrad,median), col="black", group=neighborhood )) + geom_point()
+g3 <- g2 + geom_point(aes(x = poverty, y = neighborhood, col = "red"))
+g3 + geom_point(aes(x = foreignBorn, y = neighborhood, col = "blue")) + 
+  ylab("Neighborhood") + xlab("Fraction with a college degree") + scale_colour_manual(name = 'color', 
+  values =c('black'='black','red'='red','blue'='blue'), labels = c('college grad','foreign born','poverty'))
+```
+
+
+(c) What patterns do you observe? What neighborhoods do not appear to follow these patterns?
+
+1.The regions that have the largest percentage of collegeGrad have least percentage of foreignBorn and poverty level. 
+
+2.The regions that have the least percentage of coolegeGrad have more foreignBorn compare to regions that have most percentage of collegeGrad.
+
+3.Poverty level is not very varied compare to percentage of collegeGrad and the percentage of foreignBorn. With fraction with a college degree less than 0.3, poverty level of some neighborhoods exceed 0.1, otherwise, none of the neighborhoods has a poverty level exceeds 0.1
+
+4.There are two blue dots that are outliers (neighborhood Seward and Lyndale). They have a large percentage of foreignBorn and a decent amount of college graduates and a small percentage of poverty.
+
+
+### 3. Taxis
+
+Data: NYC yellow cab rides in June 2018, available here:  
+
+http://www.nyc.gov/html/tlc/html/about/trip_record_data.shtml
+
+It's a large file so work with a reasonably-sized random subset of the data.
+```{r}
+cab <- read.csv("yellow_tripdata_2018-06.csv")
+```
+
+```{r}
+cab <- cab[sample(nrow(cab), 10000), ]
+```
+
+Draw four scatterplots of `tip_amount` vs. `fare_amount` with the following variations:
+
+(a) Points with alpha blending
+
+```{r fig.height=4}
+g1 <- ggplot(cab, aes(x = tip_amount, y = fare_amount)) + 
+  geom_point(color = "blue", alpha = 0.2)
+g1
+```
+
+
+(b) Points with alpha blending + density estimate contour lines
+
+```{r fig.height=4}
+library(MASS)
+f1 <- kde2d(cab$tip_amount, cab$fare_amount, n = 500)
+df <- con2tr(f1)
+
+g2 <- ggplot(df, aes(x, y)) + geom_contour(aes(z = z)) + 
+  geom_point(data = cab, aes(x = tip_amount, y = fare_amount), alpha =0.2) + 
+  xlim(0, 5) + ylim(0, 20) 
+g2
+```
+
+(c) Hexagonal heatmap of bin counts
+
+```{r fig.height=5}
+library(hexbin)
+g3 <- ggplot(cab, aes(x = tip_amount, y = fare_amount)) + geom_hex()
+g3
+```
+
+
+(d) Square heatmap of bin counts 
+
+```{r fig.height=5}
+g4 <- ggplot(cab, aes(x = tip_amount, y = fare_amount)) + geom_bin2d()
+g4
+```
+
+
+For all, adjust parameters to the levels that provide the best views of the data.
+
+(e) Describe noteworthy features of the data, using the "Movie ratings" example on page 82 (last page of Section 5.3) as a guide.
+
+1.There are people who pay tip proportional to their fare. At the same time, there are always people who don't tip no matter how far they travel, especially when the distance is short. Those two types of people forms the majority and we can see that from the bimodality.
+
+2.The farther they travel, the more they tip. There are certain trends such that slopes are upward sloping because people tip different amount in proportion to the fare. In addition, there are certain people who only tip one dollar or two dollars no matter how far they travel.
+
+3.There are few points in the lower right triangular area because people rarely overtip.
+
+
+### 4. Olive Oil
+
+Data: `olives` dataset in **extracat** package
+
+```{r}
+library(extracat)
+data("olives")
+```
+
+(a) Draw a scatterplot matrix of the eight continuous variables. Which pairs of variables are strongly positively associated and which are strongly negatively associated?
+
+```{r}
+pairs(olives[,3:10], pch = 19)
+```
+
+```{r}
+#To analyze numerically, using an alternative method to see the correlation.
+library(psych)
+pairs.panels(olives[,3:10], method = 'pearson')
+```
+
+I observed that palmitic and palmitoleic are strongly positively correlated with r = 0.84 , and linolenic and palmitoleic, linolenic and arachidic are semi-strongly positively correlated with r = 0.62 .
+
+I observed that oleic and linoleic, palmitoleic and oleic are strongly negatively correlated with r = -0.85 , and palmitic and oleic are also strongly negatively correlated with r =-0.84 .
+
+
+(b) Color the points by region.  What do you observe?
+
+```{r }
+colors <- c("red","forest green","blue")
+#pairs(olives[,3:10], col = colors[factor(olives$Region)], pch = 19)
+#legend("bottomright", fill = unique(olives$Region), legend = c(levels(olives$Region)))
+```
+
+```{r}
+pairs(olives[,3:10], col = colors[factor(olives$Region)], pch = 19)
+legend("bottom", xpd=TRUE, horiz=TRUE, inset=c(0,-0.05), 
+       fill=c("forest green", "red","blue"), legend=c(levels(olives$Region)))
+```
+
+With colored regions, I observed a pattern that olives from the same region are closely clustered together. 
+Although most of the time all the olives are all clustered tightly together, in some cases it is pretty clear that olives from different regions are separated into three distinct clusters. Olives from the Sardinia are most tightly clustered.
+There are the most olives from the South as we can see there are more blue dots than others. They form the correlation mostly. 
+The olives from the North and Sardinia contain almost none eicosenoic.
+See from the pattern of red points when comparing with linolenic and arachidic, these traits seem not to be correlated with other fatty acids.
+
+### 5. Wine
+
+Data: `wine` dataset in **pgmm** package
+
+```{r}
+library(pgmm)
+data(wine)
+```
+
+(Recode the `Type` variable to descriptive names.)
+
+```{r revalue}
+wine$Type <- revalue(factor(wine$Type), replace = c("1" = "Barolo",
+                                                    "2" = "Grignolino", "3" = "Barbera"))
+```
+
+
+(a) Use parallel coordinate plots to explore how the variables separate the wines by `Type`. Present the version that you find to be most informative. You do not need to include all of the variables.
+
+In order to find the most informative variables, I group the data by type to see the group mean. I will choose the variables that have group means that differ the most. 
+
+```{r }
+agg <- aggregate(wine[,2:28],list(wine$Type),mean)
+agg
+```
+
+```{r fig.height =6}
+library(GGally)
+wine_group <- group_by(wine, wine$Type)
+info <- c(4,12,13,17,19,27)
+colors <- c("red","blue","black")
+
+parcoord(wine_group[,info], col = colors[factor(wine$Type)])
+
+#another way of plotting parallel coordinate plots
+ggparcoord(wine_group, scale='uniminmax', columns = info, groupColumn = 1)
+
+```
+
+
+(b) Explain what you discovered.
+
+Barolo wine tends to have more proline.
+Barolo wine tends to have least amount of calcium.
+
+Barbera tends to have least amount of flavanoids.
+Barbera wine tends to have more fixed acidity.
+
+Grignolino tends to have least amount of fixed acidity and proline.
+Some of Grignolino wine tends to have less magnesium and proanthocyanins.
+Some of Grignolino wine has the most amount of calcium, magnesium, flavanoids, and proanthocyanins.
+
+Compare to Barolo wine and Barbera wine, Grignolino wine varies the most. 
+
+
